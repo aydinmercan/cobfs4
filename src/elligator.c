@@ -7,6 +7,150 @@
 #include "elligator.h"
 
 static const char *X25519_PRIME = "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed";
+static const unsigned long A = 486662;
+static const unsigned long u = 2;
+
+static inline int proper_sqrt(BIGNUM *r, const BIGNUM *a, const BIGNUM *p, BN_CTX *bnctx) {
+    BIGNUM *tmp;
+    BIGNUM *tmp2;
+    BIGNUM *tmp3;
+
+    tmp = BN_new();
+    if (!tmp) {
+        return 0;
+    }
+    tmp2 = BN_new();
+    if (!tmp2) {
+        goto free_tmp;
+    }
+    tmp3 = BN_new();
+    if (!tmp2) {
+        goto free_tmp2;
+    }
+
+    //tmp2 = (p-1)//4
+    if (!BN_copy(tmp2, p)) {
+        goto error;
+    }
+    if (!BN_sub_word(tmp2, 1)) {
+        goto error;
+    }
+    if (!BN_rshift1(tmp2, tmp2)) {
+        goto error;
+    }
+    if (!BN_rshift1(tmp2, tmp2)) {
+        goto error;
+    }
+    //tmp = u
+    if (!BN_set_word(tmp, u)) {
+        goto error;
+    }
+    //tmp = u**((p-1)//4), also know as sqrt(-1)
+    if (!BN_mod_exp(tmp, tmp, tmp2, p, bnctx)) {
+        goto error;
+    }
+
+    //tmp2 = (p+3)//8
+    if (!BN_copy(tmp2, p)) {
+        goto error;
+    }
+    if (!BN_add_word(tmp2, 3)) {
+        goto error;
+    }
+    if (!BN_rshift1(tmp2, tmp2)) {
+        goto error;
+    }
+    if (!BN_rshift1(tmp2, tmp2)) {
+        goto error;
+    }
+    if (!BN_rshift1(tmp2, tmp2)) {
+        goto error;
+    }
+    //r = a**((p+3)//8), also known as mod_sqrt(a)
+    if (!BN_mod_exp(tmp3, a, tmp2, p, bnctx)) {
+        goto error;
+    }
+
+#if 0
+    printf("Our sqrt input:\n%s\n",
+            BN_bn2hex(a)
+    );
+#endif
+#if 0
+    printf("Our sqrt:\n%s\n",
+            BN_bn2hex(tmp3)
+    );
+#endif
+
+    //tmp2 = r**2, aka sqrt(a)**2
+    if (!BN_mod_sqr(tmp2, tmp3, p, bnctx)) {
+        goto error;
+    }
+
+#if 0
+    printf("Squared result:\n%s\n",
+            BN_bn2hex(tmp2)
+    );
+#endif
+
+#if 0
+    printf("Comparator:\n%s\n",
+            BN_bn2hex(a)
+    );
+#endif
+
+    if (BN_cmp(tmp2, a) != 0) {
+        //r *= sqrt(-1)
+        if (!BN_mod_mul(tmp3, tmp3, tmp, p, bnctx)) {
+            goto error;
+        }
+    }
+
+    //tmp = (p-1)//2
+    if (!BN_copy(tmp, p)) {
+        goto error;
+    }
+    if (!BN_sub_word(tmp, 1)) {
+        goto error;
+    }
+    if (!BN_rshift1(tmp, tmp)) {
+        goto error;
+    }
+
+    //True if tmp3 is negative (greater than (p-1)//2)
+    if (BN_cmp(tmp3, tmp) == 1) {
+        if (!BN_copy(tmp2, p)) {
+            goto error;
+        }
+        if (!BN_sub_word(tmp2, 1)) {
+            goto error;
+        }
+        //tmp2 = tmp3**((p-1)//2)
+        if (!BN_mod_mul(tmp3, tmp3, tmp2, p, bnctx)) {
+            goto error;
+        }
+    }
+
+
+    if (!BN_copy(r, tmp3)) {
+        goto error;
+    }
+
+#if 0
+    if (!BN_nnmod(r, r, p, bnctx)) {
+        goto error;
+    }
+#endif
+    return 1;
+
+error:
+    BN_free(tmp3);
+free_tmp2:
+    BN_free(tmp2);
+free_tmp:
+    BN_free(tmp);
+    return 0;
+}
 
 enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_elligator[static restrict COBFS4_ELLIGATOR_LEN]) {
     BIGNUM *r;
@@ -21,9 +165,6 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
     uint8_t skey[32];
     size_t skeylen = 32;
     EVP_PKEY_CTX *pctx;
-
-    const unsigned long A = 486662;
-    const unsigned long u = 2;
 
     pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_X25519, NULL);
     if (!pctx) {
@@ -84,11 +225,6 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
         goto error;
     }
 
-    BN_zero(neg_one);
-    if (!BN_sub_word(neg_one, 1)) {
-        goto error;
-    }
-
     if (!BN_copy(p_minus_one, p)) {
         goto error;
     }
@@ -96,9 +232,26 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
         goto error;
     }
 
+#if 0
+    BN_zero(neg_one);
+    if (!BN_sub_word(neg_one, 1)) {
+        goto error;
+    }
+#else
+    if (!BN_copy(neg_one, p_minus_one)) {
+        goto error;
+    }
+#endif
+
+#if 0
     if (!BN_lebin2bn(skey, skeylen, x)) {
         goto error;
     }
+#else
+    if (!BN_bin2bn(skey, skeylen, x)) {
+        goto error;
+    }
+#endif
     if (!BN_mod(x, x, p, bnctx)) {
         goto error;
     }
@@ -127,9 +280,15 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
     if (!BN_set_word(tmp, A)) {
         goto error;
     }
+#if 0
     if (!BN_mul(tmp, tmp, neg_one, bnctx)) {
         goto error;
     }
+#else
+    if (!BN_mod_mul(tmp, tmp, neg_one, p, bnctx)) {
+        goto error;
+    }
+#endif
 
     /* Check if x == -A */
     if (BN_cmp(x, tmp) == 0) {
@@ -164,6 +323,11 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
     if (!BN_rshift1(tmp2, tmp2)) {
         goto error;
     }
+#if 0
+    if (!BN_nnmod(tmp2, tmp2, p, bnctx)) {
+        goto error;
+    }
+#endif
 
     /* (-ux(x + A))**((p-1)/2) */
     if (!BN_mod_exp(tmp, tmp, tmp2, p, bnctx)) {
@@ -215,20 +379,39 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
         goto error;
     }
 
+#if 0
     if (!BN_is_one(tmp)) {
         /* y is not a square, this is an invalid point */
+        printf("Why am I checking this?\n");
         goto error;
     }
+#endif
 
+#if 0
+    printf("(y**2):\n%s\n",
+            BN_bn2hex(y)
+    );
+#endif
+
+#if 0
     /* y = sqrt(y**2)*/
     if (!BN_mod_sqrt(y, y, p, bnctx)) {
         goto error;
     }
+#endif
 
+#if 0
+    printf("y:\n%s\n",
+            BN_bn2hex(y)
+    );
+#endif
+
+#if 0
     if (BN_is_zero(y)) {
         /* Precondition failed */
         goto error;
     }
+#endif
 
     /* tmp = (p-1)/2 */
     if (!BN_copy(tmp, p)) {
@@ -241,6 +424,18 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
         goto error;
     }
 
+#if 0
+    printf("Boundary:\n%s\n",
+            BN_bn2hex(tmp)
+    );
+#endif
+
+#if 0
+    printf("Is it negative?:\n%d\n",
+            BN_cmp(y, tmp)
+    );
+#endif
+
     /*
      * Output is r
      * if y <= (p-1)/2
@@ -248,7 +443,11 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
      * else
      *  - r = sqrt(-(x+A)/(ux))
      */
+#if 0
     if (BN_cmp(y, tmp) == 1) {
+#else
+    if (BN_cmp(y, tmp) == -1) {
+#endif
         /* y is NOT element of sqrt(Fq) */
         if (!BN_copy(r, x)) {
             goto error;
@@ -256,9 +455,20 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
         if (!BN_add_word(r, A)) {
             goto error;
         }
+#if 0
+        printf("(x+A):\n%s\n",
+                BN_bn2hex(r)
+        );
+#endif
         if (!BN_mod_mul(r, r, neg_one, p, bnctx)) {
             goto error;
         }
+
+#if 0
+        printf("-(x+A):\n%s\n",
+                BN_bn2hex(r)
+        );
+#endif
 
         if (!BN_copy(tmp, x)) {
             goto error;
@@ -266,17 +476,132 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
         if (!BN_mul_word(tmp, u)) {
             goto error;
         }
+#if 0
+        printf("(ux):\n%s\n",
+                BN_bn2hex(tmp)
+        );
+#endif
+#if 0
+        if (!BN_nnmod(tmp, tmp, p, bnctx)) {
+            goto error;
+        }
+#endif
+
 
         if (!BN_mod_inverse(tmp, tmp, p, bnctx)) {
             goto error;
         }
+#if 0
+        printf("Inverse (ux):\n%s\n",
+                BN_bn2hex(tmp)
+        );
+#endif
         if (!BN_mod_mul(r, r, tmp, p, bnctx)) {
             goto error;
         }
+#if 0
+        printf("(-(x+A)/(ux)):\n%s\n",
+                BN_bn2hex(r)
+        );
+#endif
+
+#if 1
+#if 0
+        if (!BN_mod_sqrt(r, r, p, bnctx)) {
+            goto error;
+        }
+#else
+        if (!proper_sqrt(r, r, p, bnctx)) {
+            goto error;
+        }
+#endif
+#else
+        if (!BN_set_word(tmp, u)) {
+            goto error;
+        }
+        if (!BN_copy(tmp2, p_minus_one)) {
+            goto error;
+        }
+        if (!BN_rshift1(tmp2, tmp2)) {
+            goto error;
+        }
+        if (!BN_rshift1(tmp2, tmp2)) {
+            goto error;
+        }
+        if (!BN_mod_exp(tmp, tmp, tmp2, p, bnctx)) {
+            goto error;
+        }
+        printf("sqrt(-1):\n%s\n",
+                BN_bn2hex(tmp)
+        );
+
+        if (!BN_copy(tmp2, p)) {
+            goto error;
+        }
+        if (!BN_add_word(tmp2, 3)) {
+            goto error;
+        }
+        if (!BN_rshift1(tmp2, tmp2)) {
+            goto error;
+        }
+        if (!BN_rshift1(tmp2, tmp2)) {
+            goto error;
+        }
+        if (!BN_rshift1(tmp2, tmp2)) {
+            goto error;
+        }
+        if (!BN_mod_exp(tmp2, r, tmp2, p, bnctx)) {
+            goto error;
+        }
+        printf("diff sqrt:\n%s\n",
+                BN_bn2hex(tmp2)
+        );
+
+        if (!BN_mod_mul(tmp2, tmp2, tmp, p, bnctx)) {
+            goto error;
+        }
+        printf("Super duper result:\n%s\n",
+                BN_bn2hex(tmp2)
+              );
+
+        if (!BN_mod_sqr(tmp2, tmp2, p, bnctx)) {
+            goto error;
+        }
+
+        if (BN_cmp(tmp2, r) != 0) {
+            printf("Holy fucking shit\n");
+
+            if (!BN_mod_mul(tmp2, tmp2, tmp, p, bnctx)) {
+                goto error;
+            }
+            printf("Super duper result:\n%s\n",
+                    BN_bn2hex(tmp2)
+            );
+        }
+
+#if 0
+        if (!BN_mod_sqrt(tmp, r, p, bnctx)) {
+            goto error;
+        }
+
+        if (!BN_mod_sqr(tmp, tmp, p, bnctx)) {
+            goto error;
+        }
+
+        if (BN_cmp(tmp, r) != 0) {
+            printf("Holy fucking shit\n");
+        }
+#endif
 
         if (!BN_mod_sqrt(r, r, p, bnctx)) {
             goto error;
         }
+#endif
+#if 0
+        printf("sqrt((-(x+A)/(ux))):\n%s\n",
+                BN_bn2hex(r)
+        );
+#endif
     } else {
         /* y is element of sqrt(Fq) */
         if (!BN_copy(r, x)) {
@@ -285,24 +610,110 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
         if (!BN_add_word(r, A)) {
             goto error;
         }
+#if 0
+        printf("(x+A):\n%s\n",
+                BN_bn2hex(r)
+        );
+#endif
         if (!BN_mul_word(r, u)) {
             goto error;
         }
+#if 0
+        printf("(x+A)u:\n%s\n",
+                BN_bn2hex(r)
+        );
+#endif
+#if 0
+        if (!BN_nnmod(r, r, p, bnctx)) {
+            goto error;
+        }
+#endif
         if (!BN_mod_mul(tmp, x, neg_one, p, bnctx)) {
             goto error;
         }
+#if 0
+        printf("-x:\n%s\n",
+                BN_bn2hex(tmp)
+        );
+#endif
 
         if (!BN_mod_inverse(r, r, p, bnctx)) {
             goto error;
         }
+#if 0
+        printf("Inverse ((x+A)*u):\n%s\n",
+                BN_bn2hex(tmp)
+        );
+#endif
         if (!BN_mod_mul(r, r, tmp, p, bnctx)) {
             goto error;
+        }
+
+#if 0
+        printf("-x/((x+A)*u):\n%s\n",
+                BN_bn2hex(r)
+        );
+#endif
+
+#if 1
+#if 0
+        if (!BN_mod_sqrt(r, r, p, bnctx)) {
+            goto error;
+        }
+#else
+        if (!proper_sqrt(r, r, p, bnctx)) {
+            goto error;
+        }
+#endif
+#else
+        if (!BN_set_word(tmp, u)) {
+            goto error;
+        }
+        if (!BN_copy(tmp2, p_minus_one)) {
+            goto error;
+        }
+        if (!BN_rshift1(tmp2, tmp2)) {
+            goto error;
+        }
+        if (!BN_rshift1(tmp2, tmp2)) {
+            goto error;
+        }
+        if (!BN_mod_exp(tmp, tmp, tmp2, p, bnctx)) {
+            goto error;
+        }
+        printf("sqrt(-1):\n%s\n",
+                BN_bn2hex(tmp)
+        );
+
+        if (!BN_mod_sqrt(tmp, r, p, bnctx)) {
+            goto error;
+        }
+
+        if (!BN_mod_sqr(tmp, tmp, p, bnctx)) {
+            goto error;
+        }
+
+        if (BN_cmp(tmp, r) != 0) {
+            printf("Holy fucking shit\n");
         }
 
         if (!BN_mod_sqrt(r, r, p, bnctx)) {
             goto error;
         }
+#endif
+
+#if 0
+        printf("sqrt(-x/((x+A)*u)):\n%s\n",
+                BN_bn2hex(r)
+        );
+#endif
     }
+
+#if 0
+    if (!BN_nnmod(r, r, p, bnctx)) {
+        goto error;
+    }
+#endif
 
     memset(skey, 0, skeylen);
     if (!BN_bn2bin(r, skey + (skeylen - BN_num_bytes(r)))) {
@@ -509,25 +920,68 @@ EVP_PKEY *elligator2_inv(const uint8_t buffer[static restrict COBFS4_ELLIGATOR_L
     if (!BN_set_word(tmp, A)) {
         goto error;
     }
-    if (!BN_mul(tmp, tmp, neg_one, bnctx)) {
+    if (!BN_mod_mul(tmp, tmp, neg_one, p, bnctx)) {
         goto error;
     }
+#if 0
+    printf("Negative A:\n%s\n",
+            BN_bn2hex(tmp)
+    );
+#endif
+#if 1
     if (!BN_mod_sqr(v, r, p, bnctx)) {
         goto error;
     }
+#else
+    if (!BN_mod_mul(v, r, r, p, bnctx)) {
+        goto error;
+    }
+#endif
+#if 0
+    printf("r:\n%s\n",
+            BN_bn2hex(r)
+    );
+    printf("(r**2):\n%s\n",
+            BN_bn2hex(v)
+    );
+#endif
     if (!BN_mul_word(v, u)) {
         goto error;
     }
+    if (!BN_nnmod(v, v, p, bnctx)) {
+        goto error;
+    }
+#if 0
+    printf("(ur**2):\n%s\n",
+            BN_bn2hex(v)
+    );
+#endif
     if (!BN_add_word(v, 1)) {
         goto error;
     }
+#if 0
+    printf("(1+ur**2):\n%s\n",
+            BN_bn2hex(v)
+    );
+#endif
 
     if (!BN_mod_inverse(v, v, p, bnctx)) {
         goto error;
     }
+#if 0
+    printf("Inverse (1+ur**2):\n%s\n",
+            BN_bn2hex(v)
+    );
+#endif
     if (!BN_mod_mul(v, tmp, v, p, bnctx)) {
         goto error;
     }
+
+#if 0
+    printf("Generating V:\n%s\n",
+            BN_bn2hex(v)
+    );
+#endif
 
     /* e = (v**3+Av**2+v)**((p-1)/2) */
     if (!BN_mod_sqr(e, v, p, bnctx)) {
@@ -604,9 +1058,15 @@ EVP_PKEY *elligator2_inv(const uint8_t buffer[static restrict COBFS4_ELLIGATOR_L
     if (!BN_mod_add(y, y, tmp, p, bnctx)) {
         goto error;
     }
+#if 0
     if (!BN_mod_sqrt(y, y, p, bnctx)) {
         goto error;
     }
+#else
+    if (!proper_sqrt(y, y, p, bnctx)) {
+        goto error;
+    }
+#endif
     if (!BN_mod_mul(y, y, e, p, bnctx)) {
         goto error;
     }
@@ -614,9 +1074,24 @@ EVP_PKEY *elligator2_inv(const uint8_t buffer[static restrict COBFS4_ELLIGATOR_L
         goto error;
     }
 
+#if 0
     if (!BN_bn2lebinpad(x, skey, skeylen)) {
         goto error;
     }
+#else
+    if (!BN_bn2binpad(x, skey, skeylen)) {
+        goto error;
+    }
+#endif
+
+#if 0
+    printf("Hash to curve:\nv:%s\ne:%s\nx:%s\ny:%s\n",
+            BN_bn2hex(v),
+            BN_bn2hex(e),
+            BN_bn2hex(x),
+            BN_bn2hex(y)
+    );
+#endif
 
     pkey = EVP_PKEY_new_raw_public_key(EVP_PKEY_X25519, NULL, skey, skeylen);
     if (!pkey) {

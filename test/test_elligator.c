@@ -9,6 +9,9 @@
 #include "elligator.h"
 #include "test.h"
 #include "constants.h"
+#include "utils.h"
+
+static const char *X25519_PRIME = "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed";
 
 #if 0
 /*
@@ -170,6 +173,22 @@ void test_elligator(void) {
 
         EVP_PKEY_get_raw_public_key(init_pubkey_obj, init_pubkey, &key_len);
 
+#if 1
+        BIGNUM *x = BN_new();
+        BN_bin2bn(init_pubkey, key_len, x);
+        BIGNUM *p = BN_new();
+        BN_hex2bn(&p, X25519_PRIME);
+        BN_CTX *bnctx = BN_CTX_new();
+        BN_mod(x, x, p, bnctx);
+
+        memset(init_pubkey, 0, key_len);
+        BN_bn2bin(x, init_pubkey + (key_len - BN_num_bytes(x)));
+
+        BN_CTX_free(bnctx);
+        BN_free(x);
+        BN_free(p);
+#endif
+
         rc = elligator2(init_pubkey_obj, elligator);
         if (rc == COBFS4_OK) {
             res_pubkey_obj = elligator2_inv(elligator);
@@ -178,9 +197,15 @@ void test_elligator(void) {
                 if (memcmp(init_pubkey, res_pubkey, 32) == 0) {
                     ++good;
                 } else {
+                    dump_hex(init_pubkey, 32);
+                    dump_hex(res_pubkey, 32);
+                    printf("\n");
                     ++bad;
                 }
                 EVP_PKEY_free(res_pubkey_obj);
+            } else {
+                printf("GOD FUCKING DAMMIT\n");
+                ++bad;
             }
         } else {
             ++invalid;
@@ -192,14 +217,93 @@ void test_elligator(void) {
 
     printf("Elligator test ran %d times\nResults:\nGood: %d\nBad: %d\nInvalid: %d\n", count, good, bad, invalid);
 
+#if 0
     memset(elligator, 0, sizeof(elligator));
+    dump_hex(elligator, 32);
     res_pubkey_obj = elligator2_inv(elligator);
     if (res_pubkey_obj) {
         EVP_PKEY_get_raw_public_key(res_pubkey_obj, res_pubkey, &key_len);
 
+        dump_hex(res_pubkey, 32);
+
         int res = 0;
         for (int i = 0; i < 32; ++i) {
-            if (elligator[i] != 0x00) {
+            if (res_pubkey[i] != 0x00) {
+                printf("All zero elligator input Bad!\n");
+                res = 1;
+                break;
+            }
+        }
+        if (res == 0) {
+            printf("All zero elligator input Good!\n");
+        }
+        EVP_PKEY_free(res_pubkey_obj);
+    } else {
+        printf("All zero elligator input Bad!\n");
+    }
+
+    memset(elligator, 0, sizeof(elligator));
+    elligator[31] = 0x40;
+    dump_hex(elligator, 32);
+    res_pubkey_obj = elligator2_inv(elligator);
+    if (res_pubkey_obj) {
+        EVP_PKEY_get_raw_public_key(res_pubkey_obj, res_pubkey, &key_len);
+
+        dump_hex(res_pubkey, 32);
+
+        int res = 0;
+        for (int i = 0; i < 32; ++i) {
+            if (res_pubkey[i] != 0x00) {
+                printf("All zero elligator input Bad!\n");
+                res = 1;
+                break;
+            }
+        }
+        if (res == 0) {
+            printf("All zero elligator input Good!\n");
+        }
+        EVP_PKEY_free(res_pubkey_obj);
+    } else {
+        printf("All zero elligator input Bad!\n");
+    }
+
+    memset(elligator, 0, sizeof(elligator));
+    elligator[31] = 0x80;
+    dump_hex(elligator, 32);
+    res_pubkey_obj = elligator2_inv(elligator);
+    if (res_pubkey_obj) {
+        EVP_PKEY_get_raw_public_key(res_pubkey_obj, res_pubkey, &key_len);
+
+        dump_hex(res_pubkey, 32);
+
+        int res = 0;
+        for (int i = 0; i < 32; ++i) {
+            if (res_pubkey[i] != 0x00) {
+                printf("All zero elligator input Bad!\n");
+                res = 1;
+                break;
+            }
+        }
+        if (res == 0) {
+            printf("All zero elligator input Good!\n");
+        }
+        EVP_PKEY_free(res_pubkey_obj);
+    } else {
+        printf("All zero elligator input Bad!\n");
+    }
+
+    memset(elligator, 0, sizeof(elligator));
+    elligator[31] = 0xc0;
+    dump_hex(elligator, 32);
+    res_pubkey_obj = elligator2_inv(elligator);
+    if (res_pubkey_obj) {
+        EVP_PKEY_get_raw_public_key(res_pubkey_obj, res_pubkey, &key_len);
+
+        dump_hex(res_pubkey, 32);
+
+        int res = 0;
+        for (int i = 0; i < 32; ++i) {
+            if (res_pubkey[i] != 0x00) {
                 printf("All zero elligator input Bad!\n");
                 res = 1;
                 break;
@@ -210,6 +314,7 @@ void test_elligator(void) {
         }
         EVP_PKEY_free(res_pubkey_obj);
     }
+#endif
 
     good = 0;
     bad = 0;
@@ -230,6 +335,188 @@ void test_elligator(void) {
 
     good = 0;
     bad = 0;
+
+    {
+        uint8_t init_elligator[] = {
+            0x32,0xc8,0x98,0x19,0xc7,0x4e,0xc7,0x76,0xff,0x38,0x1c,0x04,0xf6,0x21,0xad,0x15,
+            0xb3,0x8f,0x40,0xd8,0x8d,0x22,0xe8,0x91,0x8d,0x3e,0xe7,0xa6,0xff,0xfb,0x00,0xe0
+        };
+        uint8_t desired_pubkey[] = {
+            0x1b,0x29,0xce,0x91,0x2e,0xb9,0xc9,0xe5,0x63,0x62,0x1b,0x19,0xf7,0xfb,0xbb,0xe9,
+            0x66,0x3f,0xc1,0x4b,0x96,0x81,0x58,0x22,0xab,0x12,0x24,0x0e,0x47,0x4a,0xc0,0x0f
+        };
+        EVP_PKEY *res_pubkey_obj = elligator2_inv(init_elligator);
+        if (res_pubkey_obj) {
+            rc = elligator2(res_pubkey_obj, elligator);
+            if (rc == COBFS4_OK) {
+                EVP_PKEY_get_raw_public_key(res_pubkey_obj, res_pubkey, &key_len);
+
+                printf("\nInitial Elligator\n");
+                dump_hex(init_elligator, 32);
+                printf("Pubkey\n");
+                dump_hex(res_pubkey, 32);
+                printf("Desired pubkey\n");
+                dump_hex(desired_pubkey, 32);
+                printf("Resultant elligator\n");
+                dump_hex(elligator, 32);
+
+                if (memcmp(init_elligator, elligator, 32) == 0) {
+                    if (memcmp(res_pubkey, desired_pubkey, 32) == 0) {
+                        ++good;
+                    } else {
+                        ++bad;
+                    }
+                } else {
+                    ++bad;
+                }
+            } else {
+                ++bad;
+                printf("SHIT\n");
+            }
+        } else {
+            ++bad;
+            printf("FUCK\n");
+        }
+    }
+
+    printf("\n\n\n\n\nSPLIT\n\n\n\n\n");
+
+    {
+        uint8_t init_elligator[] = {
+            0x2c,0xec,0x83,0x87,0x09,0xc0,0xd6,0xfb,0xb0,0x82,0x73,0x82,0x78,0xb8,0x25,0x9e,
+            0x79,0x9a,0xa6,0x81,0xbd,0xe4,0x7f,0x00,0xc0,0xb2,0xb0,0x53,0xc0,0x41,0xed,0x16
+        };
+        uint8_t desired_pubkey[] = {
+            0x07,0xe2,0x97,0xa1,0xe4,0x4f,0x52,0x62,0x2e,0x95,0xf0,0x47,0x82,0x59,0xf7,0xf4,
+            0xb4,0x1a,0x0b,0x93,0x41,0xb1,0x52,0xac,0x86,0xd4,0x58,0x5c,0x17,0x0c,0x33,0x9e,
+        };
+        EVP_PKEY *res_pubkey_obj = elligator2_inv(init_elligator);
+        if (res_pubkey_obj) {
+            rc = elligator2(res_pubkey_obj, elligator);
+            if (rc == COBFS4_OK) {
+                EVP_PKEY_get_raw_public_key(res_pubkey_obj, res_pubkey, &key_len);
+
+                printf("\nInitial Elligator\n");
+                dump_hex(init_elligator, 32);
+                printf("Pubkey\n");
+                dump_hex(res_pubkey, 32);
+                printf("Desired pubkey\n");
+                dump_hex(desired_pubkey, 32);
+                printf("Resultant elligator\n");
+                dump_hex(elligator, 32);
+
+                if (memcmp(init_elligator, elligator, 32) == 0) {
+                    if (memcmp(res_pubkey, desired_pubkey, 32) == 0) {
+                        ++good;
+                    } else {
+                        ++bad;
+                    }
+                } else {
+                    ++bad;
+                }
+            } else {
+                ++bad;
+                printf("SHIT\n");
+            }
+        } else {
+            ++bad;
+            printf("FUCK\n");
+        }
+    }
+
+    printf("\n\n\n\n\nSPLIT\n\n\n\n\n");
+
+    {
+        uint8_t init_elligator[] = {
+            0x00,0x90,0xdf,0x0e,0xdf,0x56,0xf4,0xb6,0xf1,0x29,0xde,0xf1,0xbf,0x07,0xa1,0xfd,
+            0x76,0x52,0x8d,0xd2,0x00,0x0f,0xe2,0x65,0xc2,0x26,0x51,0xb2,0x32,0x0f,0xd1,0x2c
+        };
+        uint8_t desired_pubkey[] = {
+            0x0f,0xd8,0xb1,0x45,0x76,0xa3,0x0c,0x7d,0x9b,0x85,0xef,0x50,0xc2,0x0d,0x65,0xa2,
+            0xf6,0xa4,0xbd,0x61,0x61,0x6b,0xc9,0xf4,0x0d,0x84,0xbf,0x0e,0xc9,0xd0,0x0a,0xff
+        };
+        EVP_PKEY *res_pubkey_obj = elligator2_inv(init_elligator);
+        if (res_pubkey_obj) {
+            rc = elligator2(res_pubkey_obj, elligator);
+            if (rc == COBFS4_OK) {
+                EVP_PKEY_get_raw_public_key(res_pubkey_obj, res_pubkey, &key_len);
+
+                printf("\nInitial Elligator\n");
+                dump_hex(init_elligator, 32);
+                printf("Pubkey\n");
+                dump_hex(res_pubkey, 32);
+                printf("Desired pubkey\n");
+                dump_hex(desired_pubkey, 32);
+                printf("Resultant elligator\n");
+                dump_hex(elligator, 32);
+
+                if (memcmp(init_elligator, elligator, 32) == 0) {
+                    if (memcmp(res_pubkey, desired_pubkey, 32) == 0) {
+                        ++good;
+                    } else {
+                        ++bad;
+                    }
+                } else {
+                    ++bad;
+                }
+            } else {
+                ++bad;
+                printf("SHIT\n");
+            }
+        } else {
+            ++bad;
+            printf("FUCK\n");
+        }
+    }
+#if 0
+    {
+        uint8_t init_pubkey[] = {
+            0xcf,0xd6,0x21,0xf2,0xbc,0x3a,0x60,0x9c,0x80,0x45,0x4f,0x7b,0x54,0x90,0xf2,0x43,
+            0xac,0xcd,0x53,0x40,0x51,0x8c,0x90,0xea,0x50,0x91,0xd2,0x2a,0x27,0x3b,0x04,0x00
+        };
+        uint8_t desired[] = {
+            0x7c,0x1a,0xdf,0xb4,0x2a,0x51,0x88,0x60,0xd6,0x5c,0x07,0x33,0x80,0xe8,0x49,0xe4,
+            0x75,0x14,0x68,0xf9,0x4a,0xeb,0x1d,0x50,0xd2,0x51,0x33,0xf3,0x7b,0xd2,0xb6,0x1e
+        };
+        EVP_PKEY *init_pubkey_obj = EVP_PKEY_new_raw_public_key(EVP_PKEY_X25519, NULL, init_pubkey, key_len);
+
+        EVP_PKEY_get_raw_public_key(init_pubkey_obj, res_pubkey, &key_len);
+        printf("Sanity\n");
+        dump_hex(res_pubkey, 32);
+
+        rc = elligator2(init_pubkey_obj, elligator);
+        if (rc == COBFS4_OK) {
+            EVP_PKEY *res_pubkey_obj = elligator2_inv(elligator);
+            if (res_pubkey_obj) {
+                EVP_PKEY_get_raw_public_key(res_pubkey_obj, res_pubkey, &key_len);
+
+                printf("Elligator\n");
+                dump_hex(elligator, 32);
+                printf("Inverse\n");
+                dump_hex(res_pubkey, 32);
+                printf("Desired\n");
+                dump_hex(desired, 32);
+
+
+                if (memcmp(init_pubkey, res_pubkey, 32) == 0) {
+                    ++good;
+                } else {
+                    ++bad;
+                }
+                EVP_PKEY_free(res_pubkey_obj);
+            }
+        } else {
+            ++bad;
+            printf("FUCK\n");
+        }
+        EVP_PKEY_free(init_pubkey_obj);
+    }
+
+    printf("Elligator select tests results:\nGood: %d\nBad: %d\n", good, bad);
+#endif
+
+    printf("Elligator select tests results:\nGood: %d\nBad: %d\n", good, bad);
+
 #else
 
     for (size_t i = 0; i < sizeof(vectors)/sizeof(vectors[0]); ++i) {
