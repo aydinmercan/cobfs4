@@ -525,37 +525,49 @@ void test_elligator(void) {
 
         rc = elligator2(init_pubkey_obj, elligator);
         if (vectors[i].valid && rc != COBFS4_OK) {
+            printf("We errored on good input\n");
             ++bad;
             EVP_PKEY_free(init_pubkey_obj);
             continue;
         } else if (vectors[i].valid == false && rc != COBFS4_ERROR) {
+            printf("We expected an error\n");
             ++bad;
             EVP_PKEY_free(init_pubkey_obj);
             continue;
         }
 
+#if 0
         for (int j = 0; j < 16; ++j) {
             uint8_t tmp = elligator[j];
             elligator[j] = elligator[31-j];
             elligator[31-j] = tmp;
         }
+#endif
         if (memcmp(elligator, vectors[i].repr, sizeof(elligator)) != 0) {
+            printf("Bad forward:\n");
+            dump_hex(elligator, 32);
+            dump_hex(vectors[i].repr, 32);
             ++bad;
             EVP_PKEY_free(init_pubkey_obj);
             continue;
         }
 
+#if 0
         for (int j = 0; j < 16; ++j) {
             uint8_t tmp = elligator[j];
             elligator[j] = elligator[31-j];
             elligator[31-j] = tmp;
         }
+#endif
         res_pubkey_obj = elligator2_inv(elligator);
         if (res_pubkey_obj) {
             EVP_PKEY_get_raw_public_key(res_pubkey_obj, res_pubkey, &(size_t){32});
             if (memcmp(init_pubkey, res_pubkey, 32) == 0) {
                 ++good;
             } else {
+                printf("Bad inverse:\n");
+                dump_hex(init_pubkey, 32);
+                dump_hex(res_pubkey, 32);
                 ++bad;
             }
             //This shouldn't be necessary, but I'll do it explicitly for sanity's sake
