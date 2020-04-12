@@ -232,16 +232,9 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
         goto error;
     }
 
-#if 0
-    BN_zero(neg_one);
-    if (!BN_sub_word(neg_one, 1)) {
-        goto error;
-    }
-#else
     if (!BN_copy(neg_one, p_minus_one)) {
         goto error;
     }
-#endif
 
 #if 0
     if (!BN_lebin2bn(skey, skeylen, x)) {
@@ -296,15 +289,9 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
     if (!BN_set_word(tmp, A)) {
         goto error;
     }
-#if 0
-    if (!BN_mul(tmp, tmp, neg_one, bnctx)) {
-        goto error;
-    }
-#else
     if (!BN_mod_mul(tmp, tmp, neg_one, p, bnctx)) {
         goto error;
     }
-#endif
 
     /* Check if x == -A */
     if (BN_cmp(x, tmp) == 0) {
@@ -666,98 +653,10 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
         );
 #endif
 
-#if 1
-#if 0
-        if (!BN_mod_sqrt(r, r, p, bnctx)) {
-            goto error;
-        }
-#else
         if (!proper_sqrt(r, r, p, bnctx)) {
             goto error;
         }
-#endif
-#else
-        if (!BN_set_word(tmp, u)) {
-            goto error;
-        }
-        if (!BN_copy(tmp2, p_minus_one)) {
-            goto error;
-        }
-        if (!BN_rshift1(tmp2, tmp2)) {
-            goto error;
-        }
-        if (!BN_rshift1(tmp2, tmp2)) {
-            goto error;
-        }
-        if (!BN_mod_exp(tmp, tmp, tmp2, p, bnctx)) {
-            goto error;
-        }
-        printf("sqrt(-1):\n%s\n",
-                BN_bn2hex(tmp)
-        );
 
-        if (!BN_copy(tmp2, p)) {
-            goto error;
-        }
-        if (!BN_add_word(tmp2, 3)) {
-            goto error;
-        }
-        if (!BN_rshift1(tmp2, tmp2)) {
-            goto error;
-        }
-        if (!BN_rshift1(tmp2, tmp2)) {
-            goto error;
-        }
-        if (!BN_rshift1(tmp2, tmp2)) {
-            goto error;
-        }
-        if (!BN_mod_exp(tmp2, r, tmp2, p, bnctx)) {
-            goto error;
-        }
-        printf("diff sqrt:\n%s\n",
-                BN_bn2hex(tmp2)
-        );
-
-        if (!BN_mod_mul(tmp2, tmp2, tmp, p, bnctx)) {
-            goto error;
-        }
-        printf("Super duper result:\n%s\n",
-                BN_bn2hex(tmp2)
-              );
-
-        if (!BN_mod_sqr(tmp2, tmp2, p, bnctx)) {
-            goto error;
-        }
-
-        if (BN_cmp(tmp2, r) != 0) {
-            printf("Holy fucking shit\n");
-
-            if (!BN_mod_mul(tmp2, tmp2, tmp, p, bnctx)) {
-                goto error;
-            }
-            printf("Super duper result:\n%s\n",
-                    BN_bn2hex(tmp2)
-            );
-        }
-
-#if 0
-        if (!BN_mod_sqrt(tmp, r, p, bnctx)) {
-            goto error;
-        }
-
-        if (!BN_mod_sqr(tmp, tmp, p, bnctx)) {
-            goto error;
-        }
-
-        if (BN_cmp(tmp, r) != 0) {
-            printf("Holy fucking shit\n");
-        }
-#endif
-
-        if (!BN_mod_sqrt(r, r, p, bnctx)) {
-            goto error;
-        }
-#endif
 #if 1
         printf("sqrt((-(x+A)/(ux))):\n%s\n",
                 BN_bn2hex(r)
@@ -816,52 +715,9 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
         );
 #endif
 
-#if 1
-#if 0
-        if (!BN_mod_sqrt(r, r, p, bnctx)) {
-            goto error;
-        }
-#else
         if (!proper_sqrt(r, r, p, bnctx)) {
             goto error;
         }
-#endif
-#else
-        if (!BN_set_word(tmp, u)) {
-            goto error;
-        }
-        if (!BN_copy(tmp2, p_minus_one)) {
-            goto error;
-        }
-        if (!BN_rshift1(tmp2, tmp2)) {
-            goto error;
-        }
-        if (!BN_rshift1(tmp2, tmp2)) {
-            goto error;
-        }
-        if (!BN_mod_exp(tmp, tmp, tmp2, p, bnctx)) {
-            goto error;
-        }
-        printf("sqrt(-1):\n%s\n",
-                BN_bn2hex(tmp)
-        );
-
-        if (!BN_mod_sqrt(tmp, r, p, bnctx)) {
-            goto error;
-        }
-
-        if (!BN_mod_sqr(tmp, tmp, p, bnctx)) {
-            goto error;
-        }
-
-        if (BN_cmp(tmp, r) != 0) {
-            printf("Holy fucking shit\n");
-        }
-
-        if (!BN_mod_sqrt(r, r, p, bnctx)) {
-            goto error;
-        }
-#endif
 
 #if 1
         printf("sqrt(-x/((x+A)*u)):\n%s\n",
