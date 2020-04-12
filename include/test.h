@@ -1,8 +1,11 @@
 #ifndef COBFS4_TEST_HEADER
 #define COBFS4_TEST_HEADER
 
-//#define TEST_CASE_COUNT 1000
+#if 0
+#define TEST_CASE_COUNT 1000
+#else
 #define TEST_CASE_COUNT 0
+#endif
 
 void test_elligator(void);
 void test_hmac(void);

@@ -251,10 +251,26 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
     if (!BN_bin2bn(skey, skeylen, x)) {
         goto error;
     }
+
+    printf("Bit set? %d %d %d %d %d\n",
+            BN_is_bit_set(x, 0),
+            BN_is_bit_set(x, 1),
+            BN_is_bit_set(x, 254),
+            BN_is_bit_set(x, 255),
+            BN_is_bit_set(x, 256)
+            );
 #endif
     if (!BN_mod(x, x, p, bnctx)) {
         goto error;
     }
+
+    printf("Bit set? %d %d %d %d %d\n",
+            BN_is_bit_set(x, 0),
+            BN_is_bit_set(x, 1),
+            BN_is_bit_set(x, 254),
+            BN_is_bit_set(x, 255),
+            BN_is_bit_set(x, 256)
+            );
 
     /*
      * Do all the math here
@@ -345,6 +361,12 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
         goto error;
     }
 
+#if 1
+    printf("(x):\n%s\n",
+            BN_bn2hex(x)
+    );
+#endif
+
     /* y = y**2 = x**3 + Ax**2 + x */
     if (!BN_mod_sqr(tmp, x, p, bnctx)) {
         goto error;
@@ -352,19 +374,46 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
     if (!BN_mod_mul(tmp, tmp, x, p, bnctx)) {
         goto error;
     }
+#if 1
+    printf("(x**3):\n%s\n",
+            BN_bn2hex(tmp)
+    );
+#endif
     if (!BN_mod_add(tmp, tmp, x, p, bnctx)) {
         goto error;
     }
+#if 1
+    printf("(x**3 + x):\n%s\n",
+            BN_bn2hex(tmp)
+    );
+#endif
     if (!BN_mod_sqr(y, x, p, bnctx)) {
         goto error;
     }
     if (!BN_mul_word(y, A)) {
         goto error;
     }
+#if 1
+    if (!BN_nnmod(y, y, p, bnctx)) {
+        goto error;
+    }
+#endif
+#if 1
+    printf("(Ax**2):\n%s\n",
+            BN_bn2hex(y)
+    );
+#endif
     if (!BN_mod_add(y, y, tmp, p, bnctx)) {
         goto error;
     }
 
+#if 1
+    printf("first (y**2):\n%s\n",
+            BN_bn2hex(y)
+    );
+#endif
+
+#if 0
     /* tmp2 = (p-1)/2 */
     if (!BN_copy(tmp2, p)) {
         goto error;
@@ -378,6 +427,7 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
     if (!BN_mod_exp(tmp, y, tmp2, p, bnctx)) {
         goto error;
     }
+#endif
 
 #if 0
     if (!BN_is_one(tmp)) {
@@ -387,20 +437,112 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
     }
 #endif
 
-#if 0
+#if 1
     printf("(y**2):\n%s\n",
             BN_bn2hex(y)
     );
 #endif
 
 #if 0
+#if 1
     /* y = sqrt(y**2)*/
     if (!BN_mod_sqrt(y, y, p, bnctx)) {
         goto error;
     }
+#else
+    if (!BN_mod_sqr(y, y, p, bnctx)) {
+        goto error;
+    }
+#endif
+#else
+
+    if (!BN_copy(tmp2, p_minus_one)) {
+        goto error;
+    }
+    if (!BN_rshift1(tmp2, tmp2)) {
+        goto error;
+    }
+
+#if 1
+    printf("(p-1)/2:\n%s\n",
+            BN_bn2hex(tmp2)
+    );
+#endif
+
+#if 1
+    printf("Y**2 comparison:\n%d\n",
+            BN_cmp(y, tmp2)
+    );
+#endif
+
+    if (!BN_copy(tmp, y)) {
+        goto error;
+    }
+
+#if 0
+    if (!BN_mod_exp(tmp, y, tmp2, p, bnctx)) {
+        goto error;
+    }
+#if 1
+    printf("Fancy y**2 chi experiment:\n%s\n",
+            BN_bn2hex(tmp)
+    );
+#endif
+#endif
+
+    /* y = sqrt(y**2)*/
+    if (!proper_sqrt(y, y, p, bnctx)) {
+        goto error;
+    }
+
+#if 1
+#if 0
+    if (!BN_mod_mul(y, y, neg_one, p, bnctx)) {
+        goto error;
+    }
+#endif
+
+#if 1
+    printf("Y/Chi power comparison:\n%d\n",
+            BN_cmp(y, tmp2)
+    );
 #endif
 
 #if 0
+    if (!BN_mod_exp(tmp2, y, tmp2, p, bnctx)) {
+        goto error;
+    }
+#if 1
+    printf("Fancy y chi experiment:\n%s\n",
+            BN_bn2hex(tmp2)
+    );
+#endif
+#endif
+
+#if 1
+    //if (BN_cmp(tmp2, BN_value_one()) == 0) {
+    if (BN_cmp(tmp, tmp2) == -1) {
+    //if (BN_is_bit_set(x, 0)) {
+        printf("We're negating y\n");
+        if (!BN_mod_mul(y, y, neg_one, p, bnctx)) {
+            goto error;
+        }
+    }
+#endif
+
+#if 0
+    if (!BN_mod_mul(y, y, tmp2, p, bnctx)) {
+        goto error;
+    }
+#else
+#endif
+
+
+#endif
+
+#endif
+
+#if 1
     printf("y:\n%s\n",
             BN_bn2hex(y)
     );
@@ -414,23 +556,41 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
 #endif
 
     /* tmp = (p-1)/2 */
+#if 0
     if (!BN_copy(tmp, p)) {
         goto error;
     }
     if (!BN_sub_word(tmp, 1)) {
         goto error;
     }
+#else
+    if (!BN_copy(tmp, p_minus_one)) {
+        goto error;
+    }
+#endif
+#if 1
     if (!BN_rshift1(tmp, tmp)) {
         goto error;
     }
+#else
+    if (!BN_set_word(tmp2, u)) {
+        goto error;
+    }
+    if (!BN_mod_inverse(tmp2, tmp2, p, bnctx)) {
+        goto error;
+    }
+    if (!BN_mod_mul(tmp, tmp, tmp2, p, bnctx)) {
+        goto error;
+    }
+#endif
 
-#if 0
+#if 1
     printf("Boundary:\n%s\n",
             BN_bn2hex(tmp)
     );
 #endif
 
-#if 0
+#if 1
     printf("Is it negative?:\n%d\n",
             BN_cmp(y, tmp)
     );
@@ -443,8 +603,9 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
      * else
      *  - r = sqrt(-(x+A)/(ux))
      */
-#if 0
+#if 1
     if (BN_cmp(y, tmp) == 1) {
+    //if (BN_cmp(tmp2, BN_value_one()) == 0) {
 #else
     if (BN_cmp(y, tmp) == -1) {
 #endif
@@ -455,7 +616,7 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
         if (!BN_add_word(r, A)) {
             goto error;
         }
-#if 0
+#if 1
         printf("(x+A):\n%s\n",
                 BN_bn2hex(r)
         );
@@ -464,7 +625,7 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
             goto error;
         }
 
-#if 0
+#if 1
         printf("-(x+A):\n%s\n",
                 BN_bn2hex(r)
         );
@@ -476,7 +637,7 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
         if (!BN_mul_word(tmp, u)) {
             goto error;
         }
-#if 0
+#if 1
         printf("(ux):\n%s\n",
                 BN_bn2hex(tmp)
         );
@@ -491,7 +652,7 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
         if (!BN_mod_inverse(tmp, tmp, p, bnctx)) {
             goto error;
         }
-#if 0
+#if 1
         printf("Inverse (ux):\n%s\n",
                 BN_bn2hex(tmp)
         );
@@ -499,7 +660,7 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
         if (!BN_mod_mul(r, r, tmp, p, bnctx)) {
             goto error;
         }
-#if 0
+#if 1
         printf("(-(x+A)/(ux)):\n%s\n",
                 BN_bn2hex(r)
         );
@@ -597,7 +758,7 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
             goto error;
         }
 #endif
-#if 0
+#if 1
         printf("sqrt((-(x+A)/(ux))):\n%s\n",
                 BN_bn2hex(r)
         );
@@ -610,7 +771,7 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
         if (!BN_add_word(r, A)) {
             goto error;
         }
-#if 0
+#if 1
         printf("(x+A):\n%s\n",
                 BN_bn2hex(r)
         );
@@ -618,7 +779,7 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
         if (!BN_mul_word(r, u)) {
             goto error;
         }
-#if 0
+#if 1
         printf("(x+A)u:\n%s\n",
                 BN_bn2hex(r)
         );
@@ -631,7 +792,7 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
         if (!BN_mod_mul(tmp, x, neg_one, p, bnctx)) {
             goto error;
         }
-#if 0
+#if 1
         printf("-x:\n%s\n",
                 BN_bn2hex(tmp)
         );
@@ -640,7 +801,7 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
         if (!BN_mod_inverse(r, r, p, bnctx)) {
             goto error;
         }
-#if 0
+#if 1
         printf("Inverse ((x+A)*u):\n%s\n",
                 BN_bn2hex(tmp)
         );
@@ -649,7 +810,7 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
             goto error;
         }
 
-#if 0
+#if 1
         printf("-x/((x+A)*u):\n%s\n",
                 BN_bn2hex(r)
         );
@@ -702,7 +863,7 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
         }
 #endif
 
-#if 0
+#if 1
         printf("sqrt(-x/((x+A)*u)):\n%s\n",
                 BN_bn2hex(r)
         );
