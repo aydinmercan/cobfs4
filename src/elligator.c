@@ -125,7 +125,7 @@ static inline int proper_sqrt(BIGNUM *r, const BIGNUM *a, const BIGNUM *p, BN_CT
         if (!BN_sub_word(tmp2, 1)) {
             goto error;
         }
-        //tmp2 = tmp3**((p-1)//2)
+        //tmp3 = tmp3*(p-1)
         if (!BN_mod_mul(tmp3, tmp3, tmp2, p, bnctx)) {
             goto error;
         }
@@ -613,7 +613,7 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
      * else
      *  - r = sqrt(-(x+A)/(ux))
      */
-#if 0
+#if 1
     if (BN_cmp(y, tmp) == 1) {
     //if (BN_cmp(tmp2, BN_value_one()) == 0) {
 #else
@@ -763,7 +763,8 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
         goto error;
     }
 
-    if (BN_cmp(r, tmp) == -1) {
+    //if (BN_cmp(r, tmp) == -1) {
+    if (BN_cmp(r, tmp) == 1) {
         if (!BN_mod_mul(r, r, neg_one, p, bnctx)) {
             goto error;
         }
@@ -917,7 +918,7 @@ EVP_PKEY *elligator2_inv(const uint8_t buffer[static restrict COBFS4_ELLIGATOR_L
     if (!BN_rshift1(tmp, tmp)) {
         goto error;
     }
-    if (BN_cmp(r, tmp) == 1) {
+    if (BN_cmp(r, tmp) == -1) {
         printf("WE ARE NEGATING R IN THE INVERSE MAP\n");
         if (!BN_mod_mul(r, r, neg_one, p, bnctx)) {
             goto error;
@@ -1082,11 +1083,13 @@ EVP_PKEY *elligator2_inv(const uint8_t buffer[static restrict COBFS4_ELLIGATOR_L
         goto error;
     }
 
+#if 1
     if (BN_cmp(e, p_minus_one) == 0) {
         if (!BN_copy(e, neg_one)) {
             goto error;
         }
     }
+#endif
 
     /* x = ev-(1-e)A/2 */
     if (!BN_set_word(tmp, 1)) {
@@ -1107,6 +1110,28 @@ EVP_PKEY *elligator2_inv(const uint8_t buffer[static restrict COBFS4_ELLIGATOR_L
     if (!BN_mod_sub(x, x, tmp, p, bnctx)) {
         goto error;
     }
+
+#if 0
+    if (BN_cmp(e, neg_one) == 0) {
+        if (!BN_mod_mul(x, x, p_minus_one, p, bnctx)) {
+            goto error;
+        }
+        if (!BN_sub_word(x, A)) {
+            goto error;
+        }
+    }
+
+
+#if 0
+    if (!BN_add_word(x, A)) {
+        goto error;
+    }
+#endif
+    if (!BN_nnmod(x, x, p, bnctx)) {
+        goto error;
+    }
+#endif
+
 
     /* y = -e*sqrt(x**3+Ax**2+x) */
     if (!BN_mod_sqr(y, x, p, bnctx)) {
@@ -1136,15 +1161,6 @@ EVP_PKEY *elligator2_inv(const uint8_t buffer[static restrict COBFS4_ELLIGATOR_L
     if (!BN_mod_mul(y, y, neg_one, p, bnctx)) {
         goto error;
     }
-
-#if 0
-    if (!BN_add_word(x, A)) {
-        goto error;
-    }
-    if (!BN_nnmod(x, x, p, bnctx)) {
-        goto error;
-    }
-#endif
 
     if (!BN_bn2binpad(x, skey, skeylen)) {
         goto error;

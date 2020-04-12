@@ -182,6 +182,7 @@ void test_elligator(void) {
         BN_CTX *bnctx = BN_CTX_new();
         BN_nnmod(x, x, p, bnctx);
 
+#if 0
         BN_copy(tmp, p);
         BN_sub_word(tmp, 1);
         BN_rshift1(tmp, tmp);
@@ -190,6 +191,7 @@ void test_elligator(void) {
             BN_lshift1(tmp, tmp);
             BN_mod_mul(x, x, tmp, p, bnctx);
         }
+#endif
 
         BN_bn2binpad(x, init_pubkey, key_len);
 
@@ -204,6 +206,20 @@ void test_elligator(void) {
             res_pubkey_obj = elligator2_inv(elligator);
             if (res_pubkey_obj) {
                 EVP_PKEY_get_raw_public_key(res_pubkey_obj, res_pubkey, &key_len);
+#if 0
+                BIGNUM *x = BN_new();
+                BN_bin2bn(init_pubkey, key_len, x);
+                BIGNUM *p = BN_new();
+                BN_hex2bn(&p, X25519_PRIME);
+                BN_CTX *bnctx = BN_CTX_new();
+                BN_nnmod(x, x, p, bnctx);
+
+                BN_bn2binpad(x, init_pubkey, key_len);
+
+                BN_CTX_free(bnctx);
+                BN_free(x);
+                BN_free(p);
+#endif
                 if (memcmp(init_pubkey, res_pubkey, 32) == 0) {
                     ++good;
                 } else {
