@@ -1017,6 +1017,21 @@ EVP_PKEY *elligator2_inv(const uint8_t buffer[static restrict COBFS4_ELLIGATOR_L
         goto error;
     }
 
+#if 1
+    if (!BN_copy(tmp, p_minus_one)) {
+        goto error;
+    }
+    if (!BN_rshift1(tmp, tmp)) {
+        goto error;
+    }
+    if (BN_cmp(r, tmp) == 1) {
+        printf("WE ARE NEGATING R IN THE INVERSE MAP\n");
+        if (!BN_mod_mul(r, r, neg_one, p, bnctx)) {
+            goto error;
+        }
+    }
+#endif
+
     /*
      * Do all the math here
      * r is the raw buffer input
@@ -1245,7 +1260,7 @@ EVP_PKEY *elligator2_inv(const uint8_t buffer[static restrict COBFS4_ELLIGATOR_L
     }
 #endif
 
-#if 0
+#if 1
     printf("Hash to curve:\nv:%s\ne:%s\nx:%s\ny:%s\n",
             BN_bn2hex(v),
             BN_bn2hex(e),
