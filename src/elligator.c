@@ -253,7 +253,7 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
             BN_is_bit_set(x, 256)
             );
 #endif
-    if (!BN_mod(x, x, p, bnctx)) {
+    if (!BN_nnmod(x, x, p, bnctx)) {
         goto error;
     }
 
@@ -264,6 +264,19 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
             BN_is_bit_set(x, 255),
             BN_is_bit_set(x, 256)
             );
+
+    if (!BN_copy(tmp, p_minus_one)) {
+        goto error;
+    }
+    if (!BN_rshift1(tmp, tmp)) {
+        goto error;
+    }
+
+    if (BN_cmp(x, tmp) == 1) {
+        if (!BN_mod_mul(x, x, neg_one, p, bnctx)) {
+            goto error;
+        }
+    }
 
     /*
      * Do all the math here
@@ -317,12 +330,18 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
     }
 
     /* tmp2 = (p-1)/2 */
+#if 0
     if (!BN_copy(tmp2, p)) {
         goto error;
     }
     if (!BN_sub_word(tmp2, 1)) {
         goto error;
     }
+#else
+    if (!BN_copy(tmp2, p_minus_one)) {
+        goto error;
+    }
+#endif
     if (!BN_rshift1(tmp2, tmp2)) {
         goto error;
     }
@@ -337,11 +356,15 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
         goto error;
     }
 
+#if 0
     if (BN_cmp(tmp, p_minus_one) == 0) {
         if (!BN_copy(tmp, neg_one)) {
             goto error;
         }
     }
+#else
+
+#endif
 
     if (!BN_is_one(tmp)) {
         /* Precondition failed */
@@ -590,7 +613,7 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
      * else
      *  - r = sqrt(-(x+A)/(ux))
      */
-#if 1
+#if 0
     if (BN_cmp(y, tmp) == 1) {
     //if (BN_cmp(tmp2, BN_value_one()) == 0) {
 #else
@@ -732,8 +755,22 @@ enum cobfs4_return_code elligator2(const EVP_PKEY * restrict pkey, uint8_t out_e
     }
 #endif
 
-    memset(skey, 0, skeylen);
-    if (!BN_bn2bin(r, skey + (skeylen - BN_num_bytes(r)))) {
+#if 1
+    if (!BN_copy(tmp, p_minus_one)) {
+        goto error;
+    }
+    if (!BN_rshift1(tmp, tmp)) {
+        goto error;
+    }
+
+    if (BN_cmp(r, tmp) == -1) {
+        if (!BN_mod_mul(r, r, neg_one, p, bnctx)) {
+            goto error;
+        }
+    }
+#endif
+
+    if (!BN_bn2binpad(r, skey, skeylen)) {
         goto error;
     }
 
@@ -1090,15 +1127,9 @@ EVP_PKEY *elligator2_inv(const uint8_t buffer[static restrict COBFS4_ELLIGATOR_L
     if (!BN_mod_add(y, y, tmp, p, bnctx)) {
         goto error;
     }
-#if 0
-    if (!BN_mod_sqrt(y, y, p, bnctx)) {
-        goto error;
-    }
-#else
     if (!proper_sqrt(y, y, p, bnctx)) {
         goto error;
     }
-#endif
     if (!BN_mod_mul(y, y, e, p, bnctx)) {
         goto error;
     }
@@ -1107,16 +1138,19 @@ EVP_PKEY *elligator2_inv(const uint8_t buffer[static restrict COBFS4_ELLIGATOR_L
     }
 
 #if 0
-    if (!BN_bn2lebinpad(x, skey, skeylen)) {
+    if (!BN_add_word(x, A)) {
         goto error;
     }
-#else
-    if (!BN_bn2binpad(x, skey, skeylen)) {
+    if (!BN_nnmod(x, x, p, bnctx)) {
         goto error;
     }
 #endif
 
-#if 1
+    if (!BN_bn2binpad(x, skey, skeylen)) {
+        goto error;
+    }
+
+#if 0
     printf("Hash to curve:\nv:%s\ne:%s\nx:%s\ny:%s\n",
             BN_bn2hex(v),
             BN_bn2hex(e),

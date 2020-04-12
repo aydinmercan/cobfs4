@@ -175,18 +175,28 @@ void test_elligator(void) {
 
 #if 1
         BIGNUM *x = BN_new();
+        BIGNUM *tmp = BN_new();
         BN_bin2bn(init_pubkey, key_len, x);
         BIGNUM *p = BN_new();
         BN_hex2bn(&p, X25519_PRIME);
         BN_CTX *bnctx = BN_CTX_new();
-        BN_mod(x, x, p, bnctx);
+        BN_nnmod(x, x, p, bnctx);
 
-        memset(init_pubkey, 0, key_len);
-        BN_bn2bin(x, init_pubkey + (key_len - BN_num_bytes(x)));
+        BN_copy(tmp, p);
+        BN_sub_word(tmp, 1);
+        BN_rshift1(tmp, tmp);
+
+        if (BN_cmp(x, tmp) == -1) {
+            BN_lshift1(tmp, tmp);
+            BN_mod_mul(x, x, tmp, p, bnctx);
+        }
+
+        BN_bn2binpad(x, init_pubkey, key_len);
 
         BN_CTX_free(bnctx);
         BN_free(x);
         BN_free(p);
+        BN_free(tmp);
 #endif
 
         rc = elligator2(init_pubkey_obj, elligator);
